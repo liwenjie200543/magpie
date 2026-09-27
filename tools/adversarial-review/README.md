@@ -71,8 +71,10 @@ Reviewers can read files with their read-only tools, and that is the residual ri
 - `claude`, `copilot` and `gemini` confine file reads to their working directory (plus the brief's temporary directory for `copilot`).
   `codex -s read-only` restricts writes and network, not reads: an instruction injected into the diff could have it read a file elsewhere on the machine, such as a sibling tracker checkout, and put it into its reply to the model.
   Run the tool where nothing private sits beside the checkout under review, or leave `codex` out of the reviewer list for such machines.
+  `grok --permission-mode plan` confines writes but its read confinement is not verified yet; treat it like `codex` until it is.
 - MCP tools are switched off for `codex` (`-c mcp_servers={}`) and `claude` (`--strict-mcp-config`).
   `copilot` and `gemini` have no equivalent switch in the versions this was written against; their MCP servers, if any, stay reachable, so configure them with read-only servers or none.
+  `grok` has no CLI switch either; `mcpInheritance: none` in Grok's `config.toml` is the closest equivalent and only the adopter can set it.
 
 ## Backends
 
@@ -82,6 +84,7 @@ Reviewers can read files with their read-only tools, and that is the residual ri
 | `copilot` | `copilot -p <read the brief at …> --add-dir <brief dir> --deny-tool shell --deny-tool write` |
 | `gemini` | `gemini --approval-mode plan -o json -p <…>` (prompt on stdin) |
 | `claude` | `claude -p --output-format json --strict-mcp-config --disallowedTools Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task` (prompt on stdin) |
+| `grok` | `grok --permission-mode plan --prompt-file <brief> --output-format json` (brief file, like `copilot`) |
 
 `tests/test_backends.py` pins each command line.
 

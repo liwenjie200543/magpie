@@ -47,7 +47,7 @@ WRITE_GRANTING = {
 
 
 def test_backend_set_and_order():
-    assert list(BACKENDS) == ["codex", "copilot", "gemini", "claude"]
+    assert list(BACKENDS) == ["codex", "copilot", "gemini", "claude", "grok"]
 
 
 def test_codex_argv():
@@ -119,8 +119,23 @@ def test_claude_argv():
     assert inv.stdin == "PROMPT"
 
 
+def test_grok_argv():
+    inv = BACKENDS["grok"].build(CTX)
+    assert inv.argv == [
+        "grok",
+        "--permission-mode",
+        "plan",
+        "--prompt-file",
+        "/t/brief.md",
+        "--output-format",
+        "json",
+    ]
+    assert inv.stdin is None
+
+
 @pytest.mark.parametrize(
-    ("name", "flag"), [("codex", "-m"), ("copilot", "--model"), ("gemini", "-m"), ("claude", "--model")]
+    ("name", "flag"),
+    [("codex", "-m"), ("copilot", "--model"), ("gemini", "-m"), ("claude", "--model"), ("grok", "-m")],
 )
 def test_model_override_is_passed(name, flag):
     ctx = RunContext(**{**CTX.__dict__, "model": "some-model"})
@@ -166,7 +181,24 @@ def test_claude_extract_is_error():
         BACKENDS["claude"].extract(json.dumps({"result": "Invalid API key", "is_error": True}), CTX)
 
 
-@pytest.mark.parametrize("name", ["gemini", "claude"])
+def test_grok_extract_unwraps_text():
+    stdout = json.dumps({"text": "R", "stopReason": "end_turn", "sessionId": "s", "requestId": "r"})
+    assert BACKENDS["grok"].extract(stdout, CTX) == "R"
+
+
+def test_grok_extract_refusal_is_an_output_error():
+    stdout = json.dumps({"text": "I won't do that", "stopReason": "refusal"})
+    with pytest.raises(BackendOutputError, match="grok refused the review"):
+        BACKENDS["grok"].extract(stdout, CTX)
+
+
+def test_grok_extract_empty_text_is_an_output_error():
+    stdout = json.dumps({"text": "", "stopReason": "cancelled"})
+    with pytest.raises(BackendOutputError, match="no `text`"):
+        BACKENDS["grok"].extract(stdout, CTX)
+
+
+@pytest.mark.parametrize("name", ["gemini", "claude", "grok"])
 def test_json_envelope_backends_reject_non_json(name):
     with pytest.raises(BackendOutputError, match="not JSON"):
         BACKENDS[name].extract("plain text", CTX)

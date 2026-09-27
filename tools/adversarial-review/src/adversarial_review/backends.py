@@ -21,15 +21,17 @@ harness it belongs to is recognised, and where its final answer sits in its outp
 
 The command lines are this package's security surface. Each one keeps the
 reviewer read-only, and none carries the prompt in argv: the diff can exceed
-ARG_MAX, so the prompt goes on stdin, or through a brief file for Copilot, whose
-`-p` takes text only. `tests/test_backends.py` snapshots every argv and rejects
-known write-granting flags, so a regression that drops a read-only flag fails.
+ARG_MAX, so the prompt goes on stdin, or through a brief file for Copilot and
+Grok, whose single-turn `-p` flags take text only. `tests/test_backends.py`
+snapshots every argv and rejects known write-granting flags, so a regression
+that drops a read-only flag fails.
 
 Read-only also means no MCP tools: a reviewer inherits the user's MCP servers
 (Slack, mail, forge writes) unless told otherwise, and an injected instruction
 in the diff could reach them. Codex gets an empty `mcp_servers` table and
-Claude `--strict-mcp-config` with no config. Copilot and Gemini expose no
-equivalent switch in the versions this was written against; the README says so.
+Claude `--strict-mcp-config` with no config. Copilot, Gemini and Grok expose no
+equivalent switch in the versions this was written against; the README says so
+(Grok ships `mcpInheritance: none` as a config-file field, not a CLI flag).
 """
 
 from __future__ import annotations
@@ -186,6 +188,37 @@ def _claude_extract(stdout: str, ctx: RunContext) -> str:
     return result
 
 
+def _grok(ctx: RunContext) -> Invocation:
+    # Grok Build takes its single-turn prompt via -p/--single (argv text only,
+    # ARG_MAX-unsafe) or --prompt-file, so the brief goes through a file like
+    # Copilot's. The CLI itself reads the file, so no extra readable-dir rule
+    # is needed for it. `--permission-mode plan` is the read-only profile.
+    argv = [
+        "grok",
+        "--permission-mode",
+        "plan",
+        "--prompt-file",
+        str(ctx.brief_path),
+        "--output-format",
+        "json",
+        *_model("-m", ctx),
+    ]
+    return Invocation(argv, stdin=None)
+
+
+def _grok_extract(stdout: str, ctx: RunContext) -> str:
+    # --output-format json emits one object: {"text": ..., "stopReason":
+    # "end_turn"|"refusal"|"cancelled"|..., "sessionId": ..., "requestId": ...}.
+    data = _json_envelope(stdout, "grok")
+    stop_reason = data.get("stopReason")
+    text = data.get("text")
+    if stop_reason == "refusal":
+        raise BackendOutputError(f"grok refused the review: {text!r}")
+    if not isinstance(text, str) or not text.strip():
+        raise BackendOutputError(f"grok output has no `text` (stopReason {stop_reason!r})")
+    return text
+
+
 # Order matters for self-detection: a harness started from inside another
 # inherits the outer one's variables, so the innermost candidates are checked
 # first and Claude Code's widely inherited CLAUDECODE comes last.
@@ -194,4 +227,9 @@ BACKENDS: dict[str, Backend] = {
     "copilot": Backend("copilot", (("COPILOT_CLI", None),), _copilot, _plain_extract),
     "gemini": Backend("gemini", (("GEMINI_CLI", "1"),), _gemini, _gemini_extract),
     "claude": Backend("claude", (("CLAUDECODE", "1"),), _claude, _claude_extract),
+    # GROK_SESSION_ID is verified to be set on Grok Build's MCP-server and hook
+    # child processes (xai-org/grok-build f0e3be1100ef,
+    # crates/codegen/xai-grok-mcp/src/servers.rs and xai-grok-hooks/src/runner);
+    # whether it reaches every shell-tool child is not verified yet.
+    "grok": Backend("grok", (("GROK_SESSION_ID", None),), _grok, _grok_extract),
 }

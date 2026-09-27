@@ -14,6 +14,7 @@
   - [Variant 4 — Apache-hosted endpoint](#variant-4--apache-hosted-endpoint)
   - [Variant 5 — AWS Bedrock](#variant-5--aws-bedrock)
   - [Variant 6 — Direct Anthropic API (opt-in)](#variant-6--direct-anthropic-api-opt-in)
+  - [Variant 7 — Direct xAI API (opt-in)](#variant-7--direct-xai-api-opt-in)
   - [Verifying the setup](#verifying-the-setup)
   - [Updating after a framework version bump](#updating-after-a-framework-version-bump)
   - [Status — provisional pending ASF Legal](#status--provisional-pending-asf-legal)
@@ -351,6 +352,53 @@ The *Approved-by* line is required because Direct-Anthropic is
 opt-in. A `<project-config>/privacy-llm.md` that lists this
 endpoint without the *Approved-by* line will be flagged by the
 gate as incomplete.
+
+## Variant 7 — Direct xAI API (opt-in)
+
+**Opt-in.** xAI's Grok is not in the default-approved registry
+([`tools/privacy-llm/models.md`](../../tools/privacy-llm/models.md)):
+`api.x.ai` is a third-party endpoint and no `*.x.ai` host carries
+the `*.apache.org` infra-governance guarantee. A review or
+summarisation hop through the Grok API — including the Grok Build
+CLI, which calls it — therefore needs the same shape of contract
+as Variant 6: a data-processing agreement covering foundation
+private data, typically zero-data-retention plus a no-training
+clause.
+
+**Prerequisites:**
+
+- An xAI account whose API key is covered by a
+  zero-data-retention / no-training agreement the adopter's
+  security team has verified.
+- The API key at `~/.config/apache-magpie/xai-api.json` or via
+  `$XAI_API_KEY` set from a home-dir-sourced shell-rc — never in
+  the project tree.
+
+**`<project-config>/privacy-llm.md`** content:
+
+```markdown
+## Currently configured LLM stack
+
+- Claude Code (the agent running framework skills)
+- Direct xAI API at https://api.x.ai/v1/ (model: grok-<version>)
+
+## Approved third-party endpoints (opt-in)
+
+- xAI API direct (Grok)
+  - Data-residency contract: ZDR + no-training agreement applied
+    to API key xxxxxx-…  (link to the xAI agreement and the date
+    the adopter's security team confirmed it)
+  - Approved-by: <PMC-member-initials> <YYYY-MM-DD>
+
+## Private mailing lists for this project
+
+- private@<project>.apache.org
+```
+
+The *Approved-by* line is required because Direct-xAI is opt-in.
+A `<project-config>/privacy-llm.md` that lists this endpoint
+without the *Approved-by* line will be flagged by the gate as
+incomplete.
 
 ## Verifying the setup
 
